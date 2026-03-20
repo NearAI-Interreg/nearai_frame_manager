@@ -38,9 +38,13 @@ POSE_DATA_FIELDS = [
 POSE_CSV_FIELD_ALIASES = {
     "file_name": ("file_name", "filename", "image_name", "imagename"),
     "gps_seconds": ("gps_seconds[s]", "gps_seconds", "gps_time", "gpstime"),
+    "unix_seconds": ("gps_sec[s]", "gps_sec", "unix_seconds[s]", "unix_seconds", "unix_time", "unixtime"),
     "latitude": ("latitude[deg]", "latitude", "lat"),
     "longitude": ("longitude[deg]", "longitude", "lon", "lng"),
     "altitude": ("altitude_ellipsoidal[m]", "altitude_ellipsoidal", "altitude", "altitude_m", "alt"),
+    "x_coord": ("x[m]", "x", "easting[m]", "easting", "east"),
+    "y_coord": ("y[m]", "y", "northing[m]", "northing", "north"),
+    "z_coord": ("z[m]", "z", "height[m]", "height"),
     "roll": ("roll[deg]", "roll"),
     "pitch": ("pitch[deg]", "pitch"),
     "heading": ("heading[deg]", "heading", "yaw", "azimuth"),

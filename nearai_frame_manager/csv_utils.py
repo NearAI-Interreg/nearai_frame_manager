@@ -28,6 +28,34 @@ def build_pose_csv_column_map(fieldnames: list[str]) -> dict[str, str]:
     return mapping
 
 
+def swiss_grid_to_wgs84(easting: float, northing: float) -> tuple[float, float] | None:
+    """Convert Swiss grid (LV95/LV03) coordinates to WGS84 latitude/longitude."""
+    if 2400000.0 <= easting <= 2900000.0 and 1000000.0 <= northing <= 1400000.0:
+        y_aux = (easting - 2600000.0) / 1_000_000.0
+        x_aux = (northing - 1200000.0) / 1_000_000.0
+    elif 400000.0 <= easting <= 900000.0 and 0.0 <= northing <= 400000.0:
+        y_aux = (easting - 600000.0) / 1_000_000.0
+        x_aux = (northing - 200000.0) / 1_000_000.0
+    else:
+        return None
+    latitude = (
+        16.9023892
+        + 3.238272 * x_aux
+        - 0.270978 * (y_aux**2)
+        - 0.002528 * (x_aux**2)
+        - 0.0447 * (y_aux**2) * x_aux
+        - 0.0140 * (x_aux**3)
+    )
+    longitude = (
+        2.6779094
+        + 4.728982 * y_aux
+        + 0.791484 * y_aux * x_aux
+        + 0.1306 * y_aux * (x_aux**2)
+        - 0.0436 * (y_aux**3)
+    )
+    return (latitude * (100.0 / 36.0), longitude * (100.0 / 36.0))
+
+
 def load_pose_csv(path: str, epoch: str) -> PoseLookup:
     """Load a pose CSV into a mapping keyed by normalized image name."""
     import csv
@@ -50,14 +78,37 @@ def load_pose_csv(path: str, epoch: str) -> PoseLookup:
             if not raw_name:
                 continue
             gps_seconds = parse_float(row.get(column_map.get("gps_seconds", "")))
-            timestamp = seconds_to_utc(gps_seconds, epoch) if gps_seconds is not None else None
+            unix_seconds = parse_float(row.get(column_map.get("unix_seconds", "")))
+            raw_seconds = gps_seconds if gps_seconds is not None else unix_seconds
+            if gps_seconds is not None:
+                timestamp = seconds_to_utc(gps_seconds, epoch)
+            elif unix_seconds is not None:
+                timestamp = seconds_to_utc(unix_seconds, "unix")
+            else:
+                timestamp = None
+            latitude = parse_float(row.get(column_map.get("latitude", "")))
+            longitude = parse_float(row.get(column_map.get("longitude", "")))
+            altitude = parse_float(row.get(column_map.get("altitude", "")))
+            if altitude is None:
+                altitude = parse_float(row.get(column_map.get("z_coord", "")))
+            if latitude is None or longitude is None:
+                x_coord = parse_float(row.get(column_map.get("x_coord", "")))
+                y_coord = parse_float(row.get(column_map.get("y_coord", "")))
+                if x_coord is not None and y_coord is not None:
+                    converted = swiss_grid_to_wgs84(x_coord, y_coord)
+                    if converted is not None:
+                        converted_lat, converted_lon = converted
+                        if latitude is None:
+                            latitude = converted_lat
+                        if longitude is None:
+                            longitude = converted_lon
             poses[normalize_image_key(raw_name)] = {
                 "file_name": raw_name,
-                "gps_seconds": gps_seconds,
+                "gps_seconds": raw_seconds,
                 "timestamp": timestamp,
-                "gps_latitude": parse_float(row.get(column_map.get("latitude", ""))),
-                "gps_longitude": parse_float(row.get(column_map.get("longitude", ""))),
-                "gps_altitude_m": parse_float(row.get(column_map.get("altitude", ""))),
+                "gps_latitude": latitude,
+                "gps_longitude": longitude,
+                "gps_altitude_m": altitude,
                 "heading_deg": parse_float(row.get(column_map.get("heading", ""))),
                 "pitch_deg": parse_float(row.get(column_map.get("pitch", ""))),
                 "roll_deg": parse_float(row.get(column_map.get("roll", ""))),
